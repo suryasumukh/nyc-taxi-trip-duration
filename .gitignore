@@ -102,3 +102,9 @@ ENV/
 
 # Data Files
 data/
+
+# Weight Files
+notebooks/*.h5
+
+# Prediction Files
+notebooks/predictions.txt
