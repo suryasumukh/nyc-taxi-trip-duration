@@ -12,10 +12,27 @@ holidays = cal.holidays(start=datetime(2015, 12, 31),
 
 
 def distance(positions):
-    lats = [(positions[0], 0.0), (positions[2], 0.0)]
-    longs = [(0.0, positions[1]), (0.0, positions[3])]
-    dist = (haversine(lats[0], lats[1]) + haversine(longs[0], longs[1]))/1000
+    p1 = (positions[0], positions[1])
+    p2 = (positions[2], positions[1])
+    p3 = (positions[2], positions[3])
+    dist = (haversine(p1, p2) + haversine(p2, p3))/1000
     return dist
+
+def travel_dir(positions):
+    y = positions[1] - positions[3]
+    x = positions[0] - positions[2]
+    deg = np.degrees(np.arctan2(y, x))
+    direction = np.round(deg/45).astype(int)
+    if direction < 0:
+        direction += 8
+    return direction
+
+def bearing(positions):
+    y = positions[1] - positions[3]
+    x = positions[0] - positions[2]
+    deg = np.degrees(np.arctan2(y, x))
+    deg = ((deg + 360) % 360)/360
+    return deg
 
 def preprocess(filepath):
     assert filepath is not None
@@ -31,7 +48,7 @@ def preprocess(filepath):
     data['quarter'] = data['pickup_datetime'].dt.quarter
     data['weekday'] = (data['pickup_day'] < 5).astype(int)
     
-    data['holiday'] = (data['pickup_datetime'].dt.date.astype('datetime64').isin(holidays)).astype(int)
+    data['holiday'] = (data['pickup_datetime'].dt.date.astype('datetime64[ns]').isin(holidays)).astype(int)
     
     data = data.assign(st_dist=lambda df: np.sqrt((df.pickup_longitude-df.dropoff_longitude)**2 + 
                                        (df.pickup_latitude-df.dropoff_latitude)**2))
@@ -39,6 +56,8 @@ def preprocess(filepath):
     y = data[[u'pickup_latitude', u'pickup_longitude', 
           u'dropoff_latitude', u'dropoff_longitude']]
     data['h_dist'] = map(lambda pos: distance(pos), y.as_matrix())
+    data['travel_dir'] = map(lambda pos: travel_dir(pos), y.as_matrix())
+    data['bearing'] = map(lambda pos: bearing(pos), y.as_matrix())
     
     data['s_pickup_latitude'] = (data['pickup_latitude'] - data['pickup_latitude'].min())/(data['pickup_latitude'].max() - data['pickup_latitude'].min())
     data['s_pickup_longitude'] = (data['pickup_longitude'] - data['pickup_longitude'].min())/(data['pickup_longitude'].max() - data['pickup_longitude'].min())
