@@ -4,6 +4,7 @@ from scipy.spatial.distance import cityblock
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from datetime import datetime
 from haversine import haversine
+import pickle
 
 
 cal = USFederalHolidayCalendar()
@@ -11,28 +12,24 @@ holidays = cal.holidays(start=datetime(2015, 12, 31),
                         end=datetime(2017, 1, 1))
 
 
-def distance(positions):
-    p1 = (positions[0], positions[1])
-    p2 = (positions[2], positions[1])
-    p3 = (positions[2], positions[3])
-    dist = (haversine(p1, p2) + haversine(p2, p3))/1000
+def haversine_dist(pos):
+    p1 = (pos[0], pos[1])
+    p2 = (pos[2], pos[1])
+    p3 = (pos[2], pos[3])
+    dist = haversine(p1, p2) + haversine(p2, p3)
     return dist
 
-def travel_dir(positions):
-    y = positions[1] - positions[3]
-    x = positions[0] - positions[2]
-    deg = np.degrees(np.arctan2(y, x))
-    direction = np.round(deg/45).astype(int)
-    if direction < 0:
-        direction += 8
-    return direction
-
-def bearing(positions):
-    y = positions[1] - positions[3]
-    x = positions[0] - positions[2]
-    deg = np.degrees(np.arctan2(y, x))
-    deg = ((deg + 360) % 360)/360
-    return deg
+def bearing(pos):
+    lat1 = np.radians(pos[0])
+    lat2 = np.radians(pos[2])
+    diffLong = np.radians(pos[1] - pos[3])
+    x = np.sin(diffLong) * np.cos(lat2)
+    y = np.cos(lat1) * np.sin(lat2) - (np.sin(lat1)
+            * np.cos(lat2) * np.cos(diffLong))
+    initial_bearing = np.arctan2(x, y)
+    initial_bearing = np.degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
+    return compass_bearing
 
 def preprocess(filepath):
     assert filepath is not None
@@ -55,8 +52,7 @@ def preprocess(filepath):
     
     y = data[[u'pickup_latitude', u'pickup_longitude', 
           u'dropoff_latitude', u'dropoff_longitude']]
-    data['h_dist'] = map(lambda pos: distance(pos), y.as_matrix())
-    data['travel_dir'] = map(lambda pos: travel_dir(pos), y.as_matrix())
+    data['h_dist'] = map(lambda pos: haversine_dist(pos), y.as_matrix())
     data['bearing'] = map(lambda pos: bearing(pos), y.as_matrix())
     
     data['s_pickup_latitude'] = (data['pickup_latitude'] - data['pickup_latitude'].min())/(data['pickup_latitude'].max() - data['pickup_latitude'].min())
@@ -70,4 +66,25 @@ def preprocess(filepath):
     data['month_end'] = (data['pickup_datetime'].dt.is_month_end).astype(int)
     data['month_start'] = (data['pickup_datetime'].dt.is_month_start).astype(int)
     
+    cluster = pickle.load(open('cluster.p', 'rb'))
+    data['pickup_cluster_label'] = cluster.predict(data[['pickup_longitude', 'pickup_latitude']])
+    data['dropoff_cluster_label'] = cluster.predict(data[['dropoff_longitude', 'dropoff_latitude']])
+    
+    idx = data['pickup_cluster_label'].as_matrix()
+    data['pickup_cluster_longitude'] = cluster.cluster_centers_[idx][:, 0]
+    data['pickup_cluster_latitude'] = cluster.cluster_centers_[idx][:, 1]
+
+    idx = data['dropoff_cluster_label'].as_matrix()
+    data['dropoff_cluster_longitude'] = cluster.cluster_centers_[idx][:, 0]
+    data['dropoff_cluster_latitude'] = cluster.cluster_centers_[idx][:, 1]
+    
+    y = data[['pickup_cluster_latitude', 'pickup_cluster_longitude', 
+                  'dropoff_cluster_latitude', 'dropoff_cluster_longitude']]
+    data['cluster_dist'] = map(lambda pos: haversine_dist(pos), y.as_matrix())
+    
+    data['s_pickup_cluster_latitude'] = (data['pickup_cluster_latitude'] - data['pickup_cluster_latitude'].min())/(data['pickup_cluster_latitude'].max() - data['pickup_cluster_latitude'].min())
+    data['s_pickup_cluster_longitude'] = (data['pickup_cluster_longitude'] - data['pickup_cluster_longitude'].min())/(data['pickup_cluster_longitude'].max() - data['pickup_cluster_longitude'].min())
+
+    data['s_dropoff_cluster_latitude'] = (data['dropoff_cluster_latitude'] - data['dropoff_cluster_latitude'].min())/(data['dropoff_cluster_latitude'].max() - data['dropoff_cluster_latitude'].min())
+    data['s_dropoff_cluster_longitude'] = (data['dropoff_cluster_latitude'] - data['dropoff_cluster_latitude'].min())/(data['dropoff_cluster_latitude'].max() - data['dropoff_cluster_latitude'].min())
     return data

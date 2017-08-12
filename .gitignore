@@ -105,6 +105,9 @@ data/
 
 # Weight Files
 notebooks/*.h5
+*/*.p
+*/*.pkl
 
 # Prediction Files
 notebooks/predictions.txt
+
