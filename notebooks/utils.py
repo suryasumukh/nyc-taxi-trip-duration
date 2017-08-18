@@ -87,4 +87,25 @@ def preprocess(filepath):
 
     data['s_dropoff_cluster_latitude'] = (data['dropoff_cluster_latitude'] - data['dropoff_cluster_latitude'].min())/(data['dropoff_cluster_latitude'].max() - data['dropoff_cluster_latitude'].min())
     data['s_dropoff_cluster_longitude'] = (data['dropoff_cluster_latitude'] - data['dropoff_cluster_latitude'].min())/(data['dropoff_cluster_latitude'].max() - data['dropoff_cluster_latitude'].min())
+    
+    cols = ['id', 'pickup_mon', 'pickup_date', 'pickup_hr', 'dropoff_cluster_label']
+    grp = data[cols].groupby(['pickup_mon', 'pickup_date', 'pickup_hr', 
+                          'dropoff_cluster_label']).agg('count')
+    grp.columns = [x+'_count' for x in grp.columns]
+    grp.reset_index(inplace=True)
+    
+    data = data.merge(grp, how='inner', left_on=['pickup_mon', 'pickup_date', 'pickup_hr', 
+                          'dropoff_cluster_label'], 
+                     right_on=['pickup_mon', 'pickup_date', 'pickup_hr', 
+                          'dropoff_cluster_label'])
+    
+    cols = ['id', 'pickup_mon', 'pickup_date', 'pickup_hr']
+    grp = data[cols].groupby(['pickup_mon', 'pickup_date', 'pickup_hr']).agg('count')
+    grp.columns = [x+'_count_hr' for x in grp.columns]
+    grp.reset_index(inplace=True)
+    
+    data = data.merge(grp, how='inner', left_on=['pickup_mon', 'pickup_date', 'pickup_hr'], 
+               right_on=['pickup_mon', 'pickup_date', 'pickup_hr'])
+    data['traffic_hr_cluster'] = data['id_count']/data['id_count_hr']*1.0
+    
     return data
